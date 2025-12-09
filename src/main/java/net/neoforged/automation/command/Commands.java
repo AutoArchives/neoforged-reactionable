@@ -18,33 +18,31 @@ import java.util.Set;
 public class Commands {
     public static CommandDispatcher<GHCommandContext> register(CommandDispatcher<GHCommandContext> dispatcher) {
         dispatcher.register(literal("run")
-                .requires(Requirement.IS_PR.and(Requirement.IS_MAINTAINER.or(Requirement.IS_PR)))
+                .requires(Requirement.IS_PR.and(Requirement.IS_MAINTAINER.or(Requirement.IS_AUTHOR)))
                 .then(argument("tasks", StringArgumentType.greedyString())
                         .executes(FunctionalInterfaces.throwingCommand(context -> {
                             var pr = context.getSource().pullRequest();
                             var config = Configuration.get();
                             var repoConfig = Configuration.get(context.getSource().repository());
-                            if (repoConfig.baseRunCommand() != null) {
-                                var tasks = context.getArgument("tasks", String.class).trim();
-                                var comment = pr.comment("Running Gradle tasks `" + tasks + "`...");
-                                FormattingCommand.run(
-                                        context.getSource().gitHub(), pr,
-                                        config.prActions(), repoConfig,
-                                        Arrays.stream(tasks.split(" ")).map(t -> "./gradlew " + t).toList(),
-                                        err -> {
-                                            context.getSource().onError().run();
-                                            try {
-                                                context.getSource().issue()
-                                                        .comment("Workflow failed: " + err.getHtmlUrl());
-                                            } catch (Exception ex) {
-                                                throw new RuntimeException(ex);
-                                            }
-                                        }, () -> {
-                                            context.getSource().onSuccess().run();
-                                            FunctionalInterfaces.ignoreExceptions(comment::delete);
+                            var tasks = context.getArgument("tasks", String.class).trim();
+                            var comment = pr.comment("Running Gradle tasks `" + tasks + "`...");
+                            FormattingCommand.run(
+                                    context.getSource().gitHub(), pr,
+                                    config.prActions(), repoConfig,
+                                    Arrays.stream(tasks.split(" ")).map(t -> "./gradlew " + t).toList(),
+                                    err -> {
+                                        context.getSource().onError().run();
+                                        try {
+                                            context.getSource().issue()
+                                                    .comment("Workflow failed: " + err.getHtmlUrl());
+                                        } catch (Exception ex) {
+                                            throw new RuntimeException(ex);
                                         }
-                                );
-                            }
+                                    }, () -> {
+                                        context.getSource().onSuccess().run();
+                                        FunctionalInterfaces.ignoreExceptions(comment::delete);
+                                    }
+                            );
                             return GHCommandContext.DEFERRED_RESPONSE;
                         }))));
 
