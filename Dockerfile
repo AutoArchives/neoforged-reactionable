@@ -1,4 +1,4 @@
-FROM openjdk:21
+FROM eclipse-temurin:21
 COPY build/libs/reactionable-all.jar /reactionable.jar
 VOLUME ["/home/reactionable"]
 WORKDIR /home/reactionable
