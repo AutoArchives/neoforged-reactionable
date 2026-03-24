@@ -9,6 +9,7 @@ import org.kohsuke.github.GitHubAccessor;
 
 import java.net.URI;
 import java.util.Properties;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class VersionLabelHandler implements ActionBasedHandler<GHEventPayload.PullRequest> {
@@ -24,7 +25,9 @@ public class VersionLabelHandler implements ActionBasedHandler<GHEventPayload.Pu
         var mcVersionProp = props.get("minecraft_version");
 
         if (mcVersionProp != null) {
-            var mcVer = mcVersionProp.toString();
+            var matcher = Pattern.compile("([2-9]\\d+\\.\\d+)|(\\d+\\.\\d+(\\.\\d+)?)").matcher(mcVersionProp.toString());
+            if (!matcher.find()) return;
+            var mcVer = matcher.group();
 
             var toRemoveLabels = payload.getPullRequest().getLabels().stream()
                     .map(GHLabel::getName)

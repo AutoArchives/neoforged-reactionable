@@ -95,7 +95,7 @@ public class AuthUtil {
                 final GitHub gitHub = getApp();
 
                 final GHAppInstallationToken token = owner.apply(gitHub.getApp()).createToken().create();
-                return new Jwt(token.getExpiresAt().toInstant(), token.getToken());
+                return new Jwt(token.getExpiresAt(), token.getToken());
             }
         };
     }
