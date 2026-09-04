@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -41,7 +42,7 @@ public class BackportCommand {
 
         generateAndApply(
                 gh, pr, configuration, branch, exception,
-                (newBranch) -> {
+                (newBranch, rejects) -> {
                     if (!didExist) {
                         var body = new StringBuilder();
 
@@ -59,7 +60,7 @@ public class BackportCommand {
                         var createdPr = pr.getRepository()
                                 .createPullRequest(
                                         "Backport to " + branch + ": " + pr.getTitle().replaceFirst("^[\\[\\(][\\d\\.]+[\\]\\)]|(Backport to [\\d.]+:)", "").trim(),
-                                        newBranch, branch, body.toString()
+                                        newBranch, branch, body.toString(), true, rejects
                                 );
 
                         var labelsToAdd = pr.getLabels()
@@ -86,7 +87,7 @@ public class BackportCommand {
         );
     }
 
-    public static void generateAndApply(GitHub gh, GHPullRequest pr, Configuration configuration, String branch, ActionExceptionHandler exception, FunctionalInterfaces.ConsumerException<String> onSuccess) throws IOException {
+    public static void generateAndApply(GitHub gh, GHPullRequest pr, Configuration configuration, String branch, ActionExceptionHandler exception, FunctionalInterfaces.BiConsumerException<String, Boolean> onSuccess) throws IOException {
         var backport = configuration.getRepo(pr.getRepository()).backport();
         Main.actionRunner(gh, configuration.prActions())
                 .name("Backport " + pr.getRepository().getFullName() + " #" + pr.getNumber() + " to " + branch + ": generate patch")
@@ -131,7 +132,7 @@ public class BackportCommand {
                 .queue();
     }
 
-    public static void applyPatch(GitHub gh, GHPullRequest pr, Configuration configuration, String diff, String branch, ActionExceptionHandler exception, FunctionalInterfaces.ConsumerException<String> onSuccess) throws IOException {
+    public static void applyPatch(GitHub gh, GHPullRequest pr, Configuration configuration, String diff, String branch, ActionExceptionHandler exception, FunctionalInterfaces.BiConsumerException<String, Boolean> onSuccess) throws IOException {
         var backport = configuration.getRepo(pr.getRepository()).backport();
         Main.actionRunner(gh, configuration.prActions())
                 .name("Backport " + pr.getRepository().getFullName() + " #" + pr.getNumber() + " to " + branch + ": apply patch")
@@ -141,6 +142,7 @@ public class BackportCommand {
 
                     runner.detectAndSetJavaVersion();
 
+                    var rejects = new AtomicBoolean(false);
                     runner.runCaching(
                             "gradle-branch-" + pr.getRepository().getFullName() + "-" + branch + "-",
                             runner.resolveHome(".gradle/"),
@@ -161,7 +163,8 @@ public class BackportCommand {
                                 try {
                                     runner.git("apply", "--ignore-whitespace", "--recount", "-C0", "--reject", "__diff");
                                 } catch (ActionRunner.ExecutionException ignored) {
-                                    // We ignore this as even with --reject the command exists with status code 1
+                                    // Assume all failures are because of rejects
+                                    rejects.set(true);
                                 }
                                 runner.exec("rm", "__diff");
 
@@ -199,7 +202,7 @@ public class BackportCommand {
                                 .setCredentialsProvider(creds)
                                 .call();
 
-                        onSuccess.accept(newBranch);
+                        onSuccess.accept(newBranch, rejects.get());
                     });
                 })
                 .onFailure(exception)
